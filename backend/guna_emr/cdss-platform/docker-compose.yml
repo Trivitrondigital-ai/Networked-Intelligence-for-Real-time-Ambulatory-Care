@@ -1,0 +1,85 @@
+version: "3.9"
+
+services:
+  cdss-service:
+    build:
+      context: .
+      dockerfile: services/cdss_service/Dockerfile
+    container_name: cdss-service
+    env_file:
+      - .env
+    environment:
+      NLP_SERVICE_URL: http://nlp-service:8012
+      AI_SERVICE_URL: http://ai-service:8011
+      EMR_SERVICE_URL: http://emr-service:8013
+      AUDIT_DB_PATH: /tmp/cdss_audit.db
+    ports:
+      - "8010:8010"
+    depends_on:
+      - ai-service
+      - nlp-service
+      - emr-service
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: services/ai_service/Dockerfile
+    container_name: ai-service
+    env_file:
+      - .env
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+    ports:
+      - "8011:8011"
+
+  nlp-service:
+    build:
+      context: .
+      dockerfile: services/nlp_service/Dockerfile
+    container_name: nlp-service
+    env_file:
+      - .env
+    environment:
+      NLP_USE_SPACY: ${NLP_USE_SPACY}
+      NLP_USE_MEDCAT: ${NLP_USE_MEDCAT}
+      SPACY_MODEL: ${SPACY_MODEL}
+      MEDCAT_MODEL_PATH: ${MEDCAT_MODEL_PATH}
+    ports:
+      - "8012:8012"
+
+  emr-service:
+    build:
+      context: .
+      dockerfile: services/emr_service/Dockerfile
+    container_name: emr-service
+    env_file:
+      - .env
+    environment:
+      OPENMRS_BASE_URL: ${OPENMRS_BASE_URL}
+      OPENMRS_USERNAME: ${OPENMRS_USERNAME}
+      OPENMRS_PASSWORD: ${OPENMRS_PASSWORD}
+      OPENMRS_FHIR_PATH: ${OPENMRS_FHIR_PATH}
+      EMR_AUDIT_DB_PATH: /tmp/emr_cdss_bridge.db
+    ports:
+      - "8013:8013"
+
+  fhir-service:
+    build:
+      context: .
+      dockerfile: services/fhir_service/Dockerfile
+    container_name: fhir-service
+    env_file:
+      - .env
+    environment:
+      HAPI_FHIR_URL: ${HAPI_FHIR_URL}
+    ports:
+      - "8014:8014"
+
+networks:
+  default:
+    name: cdss-platform-net

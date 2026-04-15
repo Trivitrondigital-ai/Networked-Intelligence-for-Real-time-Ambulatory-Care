@@ -1,0 +1,32 @@
+{
+  "venvPath": ".",
+  "include": [
+    "services"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "services/ai_service/src",
+      "extraPaths": ["services/shared/src"]
+    },
+    {
+      "root": "services/cdss_service/src",
+      "extraPaths": ["services/shared/src"]
+    },
+    {
+      "root": "services/nlp_service/src",
+      "extraPaths": ["services/shared/src"]
+    },
+    {
+      "root": "services/shared/src",
+      "extraPaths": []
+    },
+    {
+      "root": "services/emr_service/src",
+      "extraPaths": []
+    },
+    {
+      "root": "services/fhir_service/src",
+      "extraPaths": []
+    }
+  ]
+}

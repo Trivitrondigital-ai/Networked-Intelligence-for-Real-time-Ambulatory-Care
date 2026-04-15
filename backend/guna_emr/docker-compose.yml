@@ -1,0 +1,136 @@
+services:
+  # PostgreSQL 15 - Primary storage
+  postgres:
+    image: postgres:15
+    container_name: nira-postgres
+    environment:
+      POSTGRES_DB: nira_emr
+      POSTGRES_USER: nira
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nira_secret_2024}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nira"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # HAPI FHIR R4 Server
+  hapi-fhir:
+    image: hapiproject/hapi:latest
+    container_name: nira-hapi-fhir
+    environment:
+      spring.datasource.url: jdbc:postgresql://postgres:5432/nira_emr
+      spring.datasource.username: nira
+      spring.datasource.password: ${POSTGRES_PASSWORD:-nira_secret_2024}
+      spring.datasource.driverClassName: org.postgresql.Driver
+      spring.jpa.properties.hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgres94Dialect
+      hapi.fhir.fhir_version: R4
+      hapi.fhir.cors.allow_Credentials: "true"
+      hapi.fhir.cors.allowed_origin: "*"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Redis for realtime pub/sub and queue
+  redis:
+    image: redis:7-alpine
+    container_name: nira-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # MySQL for OpenMRS reference application distro
+  openmrs-mysql:
+    image: mysql:5.7
+    container_name: nira-openmrs-mysql
+    environment:
+      MYSQL_DATABASE: openmrs
+      MYSQL_USER: openmrs
+      MYSQL_PASSWORD: ${OPENMRS_DB_PASSWORD:-openmrs_secret_2024}
+      MYSQL_ROOT_PASSWORD: ${OPENMRS_DB_ROOT_PASSWORD:-openmrs_root_secret_2024}
+    volumes:
+      - openmrs_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${OPENMRS_DB_ROOT_PASSWORD:-openmrs_root_secret_2024}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # OpenMRS / Bahmni for OPD queue
+  openmrs:
+    image: openmrs/openmrs-reference-application-distro:latest
+    container_name: nira-openmrs
+    environment:
+      DB_HOST: openmrs-mysql
+      DB_PORT: 3306
+      DB_DATABASE: openmrs
+      DB_USERNAME: openmrs
+      DB_PASSWORD: ${OPENMRS_DB_PASSWORD:-openmrs_secret_2024}
+      OMRS_DB_HOSTNAME: openmrs-mysql
+      OMRS_DB_PORT: 3306
+      OMRS_DB_NAME: openmrs
+      OMRS_DB_USERNAME: openmrs
+      OMRS_DB_PASSWORD: ${OPENMRS_DB_PASSWORD:-openmrs_secret_2024}
+    ports:
+      - "8081:8080"
+    depends_on:
+      openmrs-mysql:
+        condition: service_healthy
+
+  # Universal Converter Agent (Node.js)
+  converter-agent:
+    build:
+      context: ./converter-agent
+      dockerfile: Dockerfile
+    container_name: nira-converter-agent
+    environment:
+      DATABASE_URL: postgresql://nira:${POSTGRES_PASSWORD:-nira_secret_2024}@postgres:5432/nira_emr
+      HAPI_FHIR_URL: http://hapi-fhir:8080/fhir
+      REDIS_URL: redis://redis:6379
+      OPENMRS_URL: http://openmrs:8080/openmrs
+      OPENMRS_FHIR_PATH: ${OPENMRS_FHIR_PATH:-/ws/fhir2/R4}
+      OPENMRS_USERNAME: ${OPENMRS_USERNAME:-admin}
+      OPENMRS_PASSWORD: ${OPENMRS_PASSWORD:-Admin123}
+      NODE_ENV: production
+    ports:
+      - "3001:3001"
+    depends_on:
+      - hapi-fhir
+      - redis
+      - postgres
+
+  # Patient Portal (React)
+  patient-portal:
+    build:
+      context: ../../frontend/NIRA-repo
+      dockerfile: Dockerfile
+    container_name: nira-patient-portal
+    ports:
+      - "3002:80"
+    depends_on:
+      - converter-agent
+
+  # Doctor Portal (React)
+  doctor-portal:
+    build:
+      context: ../../frontend/NIRA-repo
+      dockerfile: Dockerfile
+    container_name: nira-doctor-portal
+    ports:
+      - "3003:80"
+    depends_on:
+      - converter-agent
+
+volumes:
+  pg_data:
+  openmrs_mysql_data:

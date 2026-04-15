@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "npm ci",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
+  "installCommand": "npm --prefix frontend/NIRA-repo ci",
+  "buildCommand": "npm --prefix frontend/NIRA-repo run build",
+  "outputDirectory": "frontend/NIRA-repo/dist",
   "rewrites": [
     {
       "source": "/(.*)",

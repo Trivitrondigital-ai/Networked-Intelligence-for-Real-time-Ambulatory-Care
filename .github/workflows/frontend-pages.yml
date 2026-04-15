@@ -21,6 +21,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/NIRA-repo
     env:
       VITE_APP_BASE_PATH: /Networked-Intelligence-for-Real-time-Ambulatory-Care/
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
@@ -40,7 +43,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: frontend/NIRA-repo/package-lock.json
 
       - name: Install frontend dependencies
         run: npm ci
@@ -51,7 +54,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: frontend/NIRA-repo/dist
 
   deploy:
     needs: build

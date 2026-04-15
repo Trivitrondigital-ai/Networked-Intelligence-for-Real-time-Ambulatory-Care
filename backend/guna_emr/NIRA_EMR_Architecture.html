@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NIRA EMR — Architecture Documentation</title>
+<style>
+  @page { size: A4; margin: 20mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', -apple-system, sans-serif;
+    color: #1a1a2e;
+    background: #fff;
+    line-height: 1.7;
+    font-size: 11pt;
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 24px 32px;
+  }
+
+  /* Cover Section */
+  .cover {
+    text-align: center;
+    padding: 60px 0 40px;
+    border-bottom: 3px solid #2563eb;
+    margin-bottom: 40px;
+    page-break-after: always;
+  }
+  .cover .logo { font-size: 48pt; margin-bottom: 8px; }
+  .cover h1 { font-size: 28pt; color: #2563eb; font-weight: 800; margin-bottom: 8px; }
+  .cover .subtitle { font-size: 14pt; color: #64748b; font-weight: 400; margin-bottom: 32px; }
+  .cover .meta { font-size: 10pt; color: #94a3b8; margin-top: 40px; }
+  .cover .meta span { display: block; margin: 4px 0; }
+  .cover .version {
+    display: inline-block;
+    background: #2563eb;
+    color: #fff;
+    padding: 4px 16px;
+    border-radius: 20px;
+    font-size: 10pt;
+    font-weight: 600;
+    margin-top: 16px;
+  }
+
+  /* Headings */
+  h2 {
+    font-size: 16pt;
+    color: #2563eb;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 6px;
+    margin: 32px 0 16px;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 12pt;
+    color: #1e293b;
+    margin: 20px 0 10px;
+    page-break-after: avoid;
+  }
+  h4 { font-size: 11pt; color: #475569; margin: 14px 0 8px; }
+
+  p { margin: 8px 0; }
+
+  /* Architecture Diagram Box */
+  .diagram-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 16px 0;
+    overflow-x: auto;
+    page-break-inside: avoid;
+  }
+  .diagram-box pre {
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 7.5pt;
+    line-height: 1.4;
+    color: #334155;
+    white-space: pre;
+    overflow: visible;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 20px;
+    font-size: 10pt;
+    page-break-inside: avoid;
+  }
+  thead { background: #2563eb; color: #fff; }
+  th { padding: 8px 12px; text-align: left; font-weight: 600; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5px; }
+  td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) { background: #f8fafc; }
+  tr:hover { background: #eff6ff; }
+
+  /* Code blocks */
+  code {
+    background: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 9.5pt;
+    color: #e11d48;
+  }
+  pre.code-block {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 16px;
+    border-radius: 8px;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 9pt;
+    line-height: 1.5;
+    overflow-x: auto;
+    margin: 12px 0;
+    page-break-inside: avoid;
+  }
+
+  /* Info Boxes */
+  .info-box {
+    background: #eff6ff;
+    border-left: 4px solid #2563eb;
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 12px 0;
+    font-size: 10pt;
+  }
+
+  /* Component Cards */
+  .card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 12px 0;
+  }
+  .card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px;
+    page-break-inside: avoid;
+  }
+  .card .card-title {
+    font-weight: 700;
+    font-size: 10pt;
+    color: #2563eb;
+    margin-bottom: 6px;
+  }
+  .card .card-desc { font-size: 9pt; color: #64748b; }
+
+  /* Badge */
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 8pt;
+    font-weight: 600;
+  }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  .badge-purple { background: #f3e8ff; color: #7c3aed; }
+
+  /* Flow Arrow */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 16px 0;
+    flex-wrap: wrap;
+    page-break-inside: avoid;
+  }
+  .flow-step {
+    background: #2563eb;
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 9pt;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .flow-arrow { color: #94a3b8; font-size: 16pt; }
+
+  /* Directory tree */
+  .tree { font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 9pt; line-height: 1.6; color: #475569; }
+  .tree .folder { color: #2563eb; font-weight: 600; }
+  .tree .file { color: #64748b; }
+
+  /* TOC */
+  .toc { margin: 20px 0 40px; }
+  .toc a { color: #2563eb; text-decoration: none; display: block; padding: 4px 0; font-size: 11pt; }
+  .toc a:hover { text-decoration: underline; }
+  .toc .indent { padding-left: 20px; font-size: 10pt; color: #64748b; }
+
+  /* Footer */
+  .footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid #e2e8f0;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 8pt;
+  }
+
+  /* Print */
+  @media print {
+    body { padding: 0; max-width: none; }
+    .no-print { display: none; }
+    h2 { break-after: avoid; }
+    .card, table, .diagram-box { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== COVER ===================== -->
+<div class="cover">
+  <div class="logo">🏥</div>
+  <h1>NIRA EMR</h1>
+  <div class="subtitle">Universal Data → FHIR EMR Converter</div>
+  <p style="font-size:11pt; color:#475569; max-width:480px; margin:0 auto;">
+    A complete EMR system that converts any healthcare input into standardized FHIR R4 records
+    with Bahmni/OpenMRS integration for OPD queue management.
+  </p>
+  <div class="version">v1.0.0</div>
+  <div class="meta">
+    <span><strong>Architecture & Technical Documentation</strong></span>
+    <span>Date: April 9, 2026</span>
+    <span>Author: NIRA Development Team</span>
+  </div>
+</div>
+
+<!-- ===================== TOC ===================== -->
+<h2>Table of Contents</h2>
+<div class="toc">
+  <a href="#overview">1. System Overview</a>
+  <a href="#arch">2. Architecture Diagram</a>
+  <a href="#dataflow">3. Data Flow Pipeline</a>
+  <a href="#components">4. Component Details</a>
+  <a class="indent" href="#patient-portal">4.1 Patient Portal</a>
+  <a class="indent" href="#doctor-portal">4.2 Doctor Portal</a>
+  <a class="indent" href="#converter">4.3 Converter Agent</a>
+  <a class="indent" href="#data-layer">4.4 Data Layer</a>
+  <a href="#api">5. API Reference</a>
+  <a href="#fhir-mapping">6. FHIR Resource Mapping</a>
+  <a href="#nlp">7. NLP Entity Extraction</a>
+  <a href="#deployment">8. Deployment</a>
+  <a href="#directory">9. Directory Structure</a>
+  <a href="#tests">10. Verified Test Scenarios</a>
+</div>
+
+<!-- ===================== 1. OVERVIEW ===================== -->
+<h2 id="overview">1. System Overview</h2>
+<p>
+  NIRA EMR is a <strong>Universal Data → FHIR EMR Converter</strong> that accepts any healthcare input — bookings,
+  symptom interviews, doctor notes, vitals, or unstructured text — and converts them into standardized
+  <strong>FHIR R4 resources</strong> stored in a HAPI FHIR server.
+</p>
+
+<div class="info-box">
+  <strong>Goal:</strong> Patient uploads symptoms/booking/history → AI Agent → Structured FHIR EMR → Doctor Queue
+</div>
+
+<h3>Key Capabilities</h3>
+<div class="card-grid">
+  <div class="card">
+    <div class="card-title">🔄 Universal Input</div>
+    <div class="card-desc">Handles bookings, symptom text, doctor notes, vitals, and any unstructured healthcare data through a single endpoint.</div>
+  </div>
+  <div class="card">
+    <div class="card-title">🧠 NLP Extraction</div>
+    <div class="card-desc">Regex-based engine extracts symptoms, vitals (BP, HR, temp, SpO2), diagnoses, medications, and exam findings.</div>
+  </div>
+  <div class="card">
+    <div class="card-title">🔥 FHIR R4 Compliant</div>
+    <div class="card-desc">All data stored as standard FHIR R4 resources: Patient, Encounter, Observation, Condition, Composition, MedicationRequest.</div>
+  </div>
+  <div class="card">
+    <div class="card-title">⚡ Realtime Queue</div>
+    <div class="card-desc">OPD queue with token system, Socket.IO notifications, and doctor portal updates in real-time.</div>
+  </div>
+</div>
+
+<!-- ===================== 2. ARCHITECTURE ===================== -->
+<h2 id="arch">2. Architecture Diagram</h2>
+
+<div class="diagram-box">
+<pre>
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            NIRA EMR SYSTEM                                  │
+│                                                                             │
+│  ┌───────────────────┐              ┌───────────────────┐                   │
+│  │  PATIENT PORTAL    │              │  DOCTOR PORTAL     │                  │
+│  │  React :3002       │              │  React :3003       │                  │
+│  │                    │              │                    │                  │
+│  │  • Booking Form    │              │  • OPD Queue       │                  │
+│  │  • Symptom Chat    │              │  • Patient EMR     │                  │
+│  │  • Vitals Form     │              │  • Doctor Notes    │                  │
+│  └────────┬───────────┘              └────────┬───────────┘                  │
+│           │ REST POST                         │ REST + Socket.IO            │
+│           ▼                                   ▼                             │
+│  ┌──────────────────────────────────────────────────────────────┐           │
+│  │            CONVERTER AGENT  (Node.js/Express :3001)          │           │
+│  │                                                              │           │
+│  │  ┌────────────┐  ┌───────────────┐  ┌──────────────────┐   │           │
+│  │  │  INPUT      │  │  NLP ENTITY   │  │  FHIR R4         │   │           │
+│  │  │  DETECTOR   │─▶│  EXTRACTOR    │─▶│  MAPPER          │   │           │
+│  │  └────────────┘  └───────────────┘  └────────┬─────────┘   │           │
+│  │                                               │             │           │
+│  │  ┌───────────────────┐   ┌────────────────────┘             │           │
+│  │  │  BAHMNI QUEUE      │◀──┘                                 │           │
+│  │  │  SERVICE            │        ┌──────────────────┐        │           │
+│  │  │  (Token + Status)   │        │  SOCKET.IO       │        │           │
+│  │  └────────┬────────────┘        │  REALTIME        │        │           │
+│  └───────────┼─────────────────────┼──────────────────┘        │           │
+│              │                     │                                        │
+│  ┌───────────┼─────────────────────┼──────────────────────────┐            │
+│  │           ▼       DATA LAYER    ▼                          │            │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐ │            │
+│  │  │ HAPI FHIR R4 │  │ PostgreSQL   │  │ Redis            │ │            │
+│  │  │ :8080        │  │ 15 :5432     │  │ :6379            │ │            │
+│  │  │              │  │              │  │                   │ │            │
+│  │  │ FHIR R4      │  │ opd_queue    │  │ Pub/Sub          │ │            │
+│  │  │ Resources    │  │ raw_input_log│  │ Notifications    │ │            │
+│  │  └──────────────┘  └──────────────┘  └──────────────────┘ │            │
+│  └────────────────────────────────────────────────────────────┘            │
+└─────────────────────────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<!-- ===================== 3. DATA FLOW ===================== -->
+<h2 id="dataflow">3. Data Flow Pipeline</h2>
+
+<div class="flow">
+  <div class="flow-step">1. RECEIVE</div><span class="flow-arrow">→</span>
+  <div class="flow-step">2. DETECT TYPE</div><span class="flow-arrow">→</span>
+  <div class="flow-step">3. NLP EXTRACT</div><span class="flow-arrow">→</span>
+  <div class="flow-step">4. FHIR MAP</div><span class="flow-arrow">→</span>
+  <div class="flow-step">5. SAVE</div><span class="flow-arrow">→</span>
+  <div class="flow-step">6. QUEUE</div><span class="flow-arrow">→</span>
+  <div class="flow-step">7. NOTIFY</div>
+</div>
+
+<table>
+  <thead><tr><th>Step</th><th>Action</th><th>Module</th></tr></thead>
+  <tbody>
+    <tr><td><strong>1. RECEIVE</strong></td><td>Accept raw data (JSON/text/booking) via REST API</td><td><code>converter.ts</code></td></tr>
+    <tr><td><strong>2. DETECT</strong></td><td>Auto-detect input type: booking, symptom, doctor notes, vitals, raw</td><td><code>universalConverter.ts</code></td></tr>
+    <tr><td><strong>3. EXTRACT</strong></td><td>NLP extracts entities: symptoms, vitals, diagnoses, medications</td><td><code>nlpExtractor.ts</code></td></tr>
+    <tr><td><strong>4. MAP</strong></td><td>Create FHIR R4 resources: Patient, Encounter, Observation, etc.</td><td><code>fhirMapper.ts</code></td></tr>
+    <tr><td><strong>5. SAVE</strong></td><td>Persist to HAPI FHIR server (or in-memory fallback)</td><td><code>hapiFhir.ts</code></td></tr>
+    <tr><td><strong>6. QUEUE</strong></td><td>Add to OPD queue with token number, doctor assignment</td><td><code>bahmniQueue.ts</code></td></tr>
+    <tr><td><strong>7. NOTIFY</strong></td><td>Push realtime event to doctor portal via Socket.IO</td><td><code>Socket.IO</code></td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== 4. COMPONENTS ===================== -->
+<h2 id="components">4. Component Details</h2>
+
+<h3 id="patient-portal">4.1 Patient Portal <span class="badge badge-blue">React :3002</span></h3>
+<table>
+  <thead><tr><th>Component</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>BookingForm</code></td><td>Appointment booking — phone, preferred time, doctor name</td></tr>
+    <tr><td><code>SymptomChat</code></td><td>Free-text symptom interview with optional vitals</td></tr>
+    <tr><td><code>VitalsForm</code></td><td>Structured vitals entry — BP, HR, temperature, SpO2, weight</td></tr>
+    <tr><td><code>ResultDisplay</code></td><td>Shows FHIR resources created, patient/encounter IDs, queue token</td></tr>
+  </tbody>
+</table>
+
+<h3 id="doctor-portal">4.2 Doctor Portal <span class="badge badge-green">React :3003</span></h3>
+<table>
+  <thead><tr><th>Component</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>QueueSidebar</code></td><td>Realtime OPD queue — call, complete, cancel patients</td></tr>
+    <tr><td><code>PatientEMR</code></td><td>Full EMR view: vitals, clinical notes, diagnoses, medications, raw FHIR</td></tr>
+    <tr><td><code>DoctorNotes</code></td><td>Free-text clinical notes → auto-extracted to FHIR resources</td></tr>
+  </tbody>
+</table>
+
+<h3 id="converter">4.3 Converter Agent <span class="badge badge-amber">Node.js :3001</span></h3>
+<table>
+  <thead><tr><th>Module</th><th>File</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td>Input Detector</td><td><code>universalConverter.ts</code></td><td>Auto-detects input type from raw data</td></tr>
+    <tr><td>NLP Extractor</td><td><code>nlpExtractor.ts</code></td><td>Regex-based extraction of medical entities</td></tr>
+    <tr><td>FHIR Mapper</td><td><code>fhirMapper.ts</code></td><td>Creates FHIR R4 compliant resources</td></tr>
+    <tr><td>HAPI FHIR Client</td><td><code>hapiFhir.ts</code></td><td>CRUD operations to HAPI FHIR server (+ memory fallback)</td></tr>
+    <tr><td>Queue Service</td><td><code>bahmniQueue.ts</code></td><td>OPD queue + token management (+ memory fallback)</td></tr>
+    <tr><td>Realtime</td><td><code>index.ts</code></td><td>Socket.IO push notifications to doctor portal</td></tr>
+  </tbody>
+</table>
+
+<h3 id="data-layer">4.4 Data Layer <span class="badge badge-purple">Infrastructure</span></h3>
+<table>
+  <thead><tr><th>Service</th><th>Port</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td>HAPI FHIR R4</td><td>8080</td><td>FHIR resource storage & search API</td></tr>
+    <tr><td>PostgreSQL 15</td><td>5432</td><td>OPD queue, audit logs, OpenMRS data</td></tr>
+    <tr><td>Redis 7</td><td>6379</td><td>Pub/sub for realtime notifications, caching</td></tr>
+    <tr><td>OpenMRS / Bahmni</td><td>8081</td><td>EMR workflow backbone</td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== 5. API ===================== -->
+<h2 id="api">5. API Reference</h2>
+
+<h3>Universal Converter</h3>
+<table>
+  <thead><tr><th>Method</th><th>Endpoint</th><th>Input</th><th>Output</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge badge-green">POST</span></td><td><code>/api/convert</code></td><td>Any JSON or text</td><td>Auto-detected → FHIR resources</td></tr>
+    <tr><td><span class="badge badge-green">POST</span></td><td><code>/api/convert/booking</code></td><td><code>{phone, time, doctor}</code></td><td>Patient + Encounter(planned)</td></tr>
+    <tr><td><span class="badge badge-green">POST</span></td><td><code>/api/convert/symptoms</code></td><td><code>{text, patientPhone?}</code></td><td>Patient + Encounter + Obs + Composition</td></tr>
+    <tr><td><span class="badge badge-green">POST</span></td><td><code>/api/convert/doctor-notes</code></td><td><code>{text, patientId, doctorName}</code></td><td>Composition + Condition + MedicationReq</td></tr>
+    <tr><td><span class="badge badge-green">POST</span></td><td><code>/api/convert/vitals</code></td><td><code>{patientId, systolic, ...}</code></td><td>Observation resources</td></tr>
+  </tbody>
+</table>
+
+<h3>Queue Management</h3>
+<table>
+  <thead><tr><th>Method</th><th>Endpoint</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge badge-blue">GET</span></td><td><code>/api/queue</code></td><td>Full OPD queue</td></tr>
+    <tr><td><span class="badge badge-blue">GET</span></td><td><code>/api/queue/doctor/:name</code></td><td>Queue filtered by doctor</td></tr>
+    <tr><td><span class="badge badge-amber">PATCH</span></td><td><code>/api/queue/:id/status</code></td><td>Update: waiting → in-progress → completed</td></tr>
+  </tbody>
+</table>
+
+<h3>FHIR Proxy</h3>
+<table>
+  <thead><tr><th>Method</th><th>Endpoint</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge badge-blue">GET</span></td><td><code>/api/fhir/patient/:id</code></td><td>Get patient resource</td></tr>
+    <tr><td><span class="badge badge-blue">GET</span></td><td><code>/api/fhir/patient/:id/everything</code></td><td>All resources for a patient</td></tr>
+    <tr><td><span class="badge badge-blue">GET</span></td><td><code>/api/fhir/encounter/:id</code></td><td>Get encounter</td></tr>
+    <tr><td><span class="badge badge-blue">GET</span></td><td><code>/api/fhir/search/:resourceType</code></td><td>Search any FHIR resource type</td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== 6. FHIR MAPPING ===================== -->
+<h2 id="fhir-mapping">6. FHIR Resource Mapping</h2>
+
+<table>
+  <thead><tr><th>Input Type</th><th>FHIR Resources Created</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Booking</strong><br><code>{phone, time, doctor}</code></td>
+      <td>
+        <span class="badge badge-blue">Patient</span>
+        <span class="badge badge-green">Encounter (planned)</span>
+        <span class="badge badge-amber">Queue Entry</span>
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Symptom Interview</strong><br><code>{text}</code></td>
+      <td>
+        <span class="badge badge-blue">Patient</span>
+        <span class="badge badge-green">Encounter (arrived)</span>
+        <span class="badge badge-purple">Observation (vitals)</span>
+        <span class="badge badge-amber">Composition (complaint)</span>
+        <span class="badge badge-amber">Queue Entry</span>
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Doctor Notes</strong><br><code>{text, patientId}</code></td>
+      <td>
+        <span class="badge badge-amber">Composition (exam + plan)</span>
+        <span class="badge badge-purple">Condition (ICD-10)</span>
+        <span class="badge badge-green">MedicationRequest</span>
+        <span class="badge badge-purple">Observation (if vitals)</span>
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Vitals</strong><br><code>{patientId, systolic, ...}</code></td>
+      <td>
+        <span class="badge badge-purple">Observation</span> (one per vital sign)
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ===================== 7. NLP ===================== -->
+<h2 id="nlp">7. NLP Entity Extraction</h2>
+
+<p>The NLP extractor uses regex patterns to extract medical entities from unstructured text:</p>
+
+<table>
+  <thead><tr><th>Entity Type</th><th>Patterns Recognized</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td>Blood Pressure</td><td><code>BP 140/90</code>, <code>blood pressure 130/85</code></td><td>→ systolic: 140, diastolic: 90</td></tr>
+    <tr><td>Heart Rate</td><td><code>HR 72</code>, <code>pulse 80 bpm</code></td><td>→ heartRate: 72</td></tr>
+    <tr><td>Temperature</td><td><code>temp 101</code>, <code>fever 102°F</code></td><td>→ temperature: 101</td></tr>
+    <tr><td>SpO2</td><td><code>spo2 98%</code>, <code>oxygen sat 95%</code></td><td>→ spo2: 98</td></tr>
+    <tr><td>Weight</td><td><code>weight 70 kg</code>, <code>wt 65</code></td><td>→ weight: 70</td></tr>
+    <tr><td>Respiratory Rate</td><td><code>RR 18</code>, <code>resp rate 20/min</code></td><td>→ respiratoryRate: 18</td></tr>
+    <tr><td>Symptoms</td><td>40+ keywords: fever, cough, headache, etc.</td><td>→ ["fever", "cough"]</td></tr>
+    <tr><td>Duration</td><td><code>for 3 days</code>, <code>since 2 weeks</code></td><td>→ "3 days"</td></tr>
+    <tr><td>Diagnoses</td><td><code>Dx viral URTI</code>, inline keywords</td><td>→ ["viral URTI"]</td></tr>
+    <tr><td>Medications</td><td><code>Rx paracetamol</code>, <code>Tab amoxicillin</code></td><td>→ ["paracetamol"]</td></tr>
+    <tr><td>Exam Findings</td><td><code>Exam normal</code>, <code>O/E: chest clear</code></td><td>→ ["Normal examination"]</td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== 8. DEPLOYMENT ===================== -->
+<h2 id="deployment">8. Deployment</h2>
+
+<h3>Docker Compose (Production)</h3>
+<pre class="code-block">cd guna_emr
+cp .env.example .env       # Set POSTGRES_PASSWORD
+docker-compose up -d       # Starts all 7 services</pre>
+
+<p>Services start in dependency order:</p>
+<div class="flow">
+  <div class="flow-step">PostgreSQL</div><span class="flow-arrow">→</span>
+  <div class="flow-step">HAPI FHIR + Redis + OpenMRS</div><span class="flow-arrow">→</span>
+  <div class="flow-step">Converter Agent</div><span class="flow-arrow">→</span>
+  <div class="flow-step">Patient &amp; Doctor Portals</div>
+</div>
+
+<h3>Dev Mode (Local — no Docker)</h3>
+<pre class="code-block"># Terminal 1 — API Backend
+cd guna_emr/converter-agent &amp;&amp; npm install &amp;&amp; npm run dev
+
+# Terminal 2 — Patient Portal
+cd guna_emr/patient-portal &amp;&amp; npm install &amp;&amp; npm run dev
+
+# Terminal 3 — Doctor Portal
+cd guna_emr/doctor-portal &amp;&amp; npm install &amp;&amp; npm run dev</pre>
+
+<div class="info-box">
+  <strong>Graceful Degradation:</strong> The converter agent runs without PostgreSQL, Redis, or HAPI FHIR — 
+  using in-memory storage. All features work for development and testing.
+</div>
+
+<!-- ===================== 9. DIRECTORY ===================== -->
+<h2 id="directory">9. Directory Structure</h2>
+
+<div class="diagram-box">
+<pre class="tree"><span class="folder">guna_emr/</span>
+├── docker-compose.yml
+├── .env.example
+├── README.md
+├── ARCHITECTURE.md
+│
+├── <span class="folder">db/</span>
+│   └── <span class="file">init.sql</span>                    <span style="color:#94a3b8">← PostgreSQL schema</span>
+│
+├── <span class="folder">converter-agent/</span>                <span style="color:#94a3b8">← Node.js backend</span>
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── <span class="folder">src/</span>
+│       ├── <span class="file">index.ts</span>                <span style="color:#94a3b8">← Express + Socket.IO</span>
+│       ├── <span class="file">types.ts</span>                <span style="color:#94a3b8">← FHIR R4 types</span>
+│       ├── <span class="folder">routes/</span>
+│       │   ├── <span class="file">converter.ts</span>        <span style="color:#94a3b8">← POST /api/convert/*</span>
+│       │   ├── <span class="file">queue.ts</span>            <span style="color:#94a3b8">← GET/PATCH /api/queue/*</span>
+│       │   └── <span class="file">fhir.ts</span>             <span style="color:#94a3b8">← GET /api/fhir/*</span>
+│       └── <span class="folder">services/</span>
+│           ├── <span class="file">universalConverter.ts</span> <span style="color:#94a3b8">← Orchestrator</span>
+│           ├── <span class="file">nlpExtractor.ts</span>      <span style="color:#94a3b8">← NLP engine</span>
+│           ├── <span class="file">fhirMapper.ts</span>        <span style="color:#94a3b8">← FHIR builders</span>
+│           ├── <span class="file">hapiFhir.ts</span>          <span style="color:#94a3b8">← FHIR client</span>
+│           ├── <span class="file">bahmniQueue.ts</span>       <span style="color:#94a3b8">← Queue service</span>
+│           ├── <span class="file">db.ts</span>                <span style="color:#94a3b8">← PostgreSQL</span>
+│           └── <span class="file">redis.ts</span>             <span style="color:#94a3b8">← Redis</span>
+│
+├── <span class="folder">patient-portal/</span>                 <span style="color:#94a3b8">← React patient UI</span>
+│   └── <span class="folder">src/components/</span>
+│       ├── <span class="file">BookingForm.tsx</span>
+│       ├── <span class="file">SymptomChat.tsx</span>
+│       ├── <span class="file">VitalsForm.tsx</span>
+│       └── <span class="file">ResultDisplay.tsx</span>
+│
+└── <span class="folder">doctor-portal/</span>                  <span style="color:#94a3b8">← React doctor UI</span>
+    └── <span class="folder">src/components/</span>
+        ├── <span class="file">QueueSidebar.tsx</span>
+        ├── <span class="file">PatientEMR.tsx</span>
+        └── <span class="file">DoctorNotes.tsx</span></pre>
+</div>
+
+<!-- ===================== 10. TESTS ===================== -->
+<h2 id="tests">10. Verified Test Scenarios</h2>
+
+<table>
+  <thead><tr><th>#</th><th>Input</th><th>FHIR Resources Created</th><th>Queue</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>1</strong></td>
+      <td><code>{phone: "9876543210", time: "10AM", doctor: "Dr Rao"}</code></td>
+      <td>Patient + Encounter(planned)</td>
+      <td>Token #1</td>
+    </tr>
+    <tr>
+      <td><strong>2</strong></td>
+      <td><code>"I have fever, cough for 3 days, BP 140/90"</code></td>
+      <td>Patient + Encounter(arrived) + Observation(BP 140/90) + Composition</td>
+      <td>Token #2</td>
+    </tr>
+    <tr>
+      <td><strong>3</strong></td>
+      <td><code>"Exam normal, Dx viral URTI, Rx paracetamol"</code></td>
+      <td>Composition(exam+plan) + Condition(URTI) + MedicationRequest</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><strong>4</strong></td>
+      <td><code>{patientId: "x", systolic: 140, diastolic: 90}</code></td>
+      <td>Observation (BP panel)</td>
+      <td>—</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="info-box">
+  All scenarios verified via live API testing on April 9, 2026. The system correctly detects input types,
+  extracts entities, creates FHIR R4 resources, and assigns queue tokens.
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  NIRA EMR v1.0.0 — Architecture Documentation — April 2026<br>
+  Confidential — For Internal Use Only
+</div>
+
+</body>
+</html>

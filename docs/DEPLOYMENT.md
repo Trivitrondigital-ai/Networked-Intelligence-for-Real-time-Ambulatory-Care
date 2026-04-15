@@ -10,7 +10,7 @@ Use the current frontend as a static app for previews, and keep the final produc
 
 ## Important limitation
 
-The frontend can run entirely on demo data, but `server/mongo-state-api.mjs` is a Node process. Static hosts do not run that process for you.
+The frontend can run entirely on demo data, but `frontend/NIRA-repo/server/mongo-state-api.mjs` is a Node process. Static hosts do not run that process for you.
 
 That means:
 
@@ -33,7 +33,7 @@ Steps:
    - `VITE_MONGO_STATE_API_URL` only if that API is hosted elsewhere
 4. Deploy.
 
-Vercel will run the root build and serve the SPA with route rewrites enabled.
+Vercel will build `frontend/NIRA-repo` and serve the SPA with route rewrites enabled.
 
 ## GitHub Pages deployment
 
@@ -54,14 +54,16 @@ Notes:
 
 ## VM deployment
 
-For AWS or Google Cloud VMs, keep the frontend in this repository and point it at your backend service URLs through environment variables.
+For AWS or Google Cloud VMs, keep the current split:
 
-Use Nginx in front of the built frontend and APIs.
+- frontend built from `frontend/NIRA-repo`
+- backend services from `backend/guna_emr`
+- Nginx in front of the frontend and APIs
 
-This repository already includes:
+The frontend already includes:
 
-- `Dockerfile`
-- `nginx.conf`
+- `frontend/NIRA-repo/Dockerfile`
+- `frontend/NIRA-repo/nginx.conf`
 
 Suggested VM flow:
 
@@ -75,6 +77,7 @@ Suggested VM flow:
 Before every deploy:
 
 ```powershell
+cd frontend/NIRA-repo
 npm ci
 npm run build
 ```
