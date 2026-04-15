@@ -273,8 +273,8 @@ function buildPatientNextAction(appointmentItem) {
 
   if (appointmentItem.journeyBucket === "missed") {
     return {
-      label: "Reschedule appointment",
-      description: "This slot has already passed. Choose a fresh time with the same doctor to continue care without losing track.",
+      label: "Change slot",
+      description: "This slot has already passed. Choose a fresh date/time with the same doctor to continue care without losing track.",
       to: buildPatientBookingPath(appointmentItem.doctorId, appointmentItem.id)
     };
   }

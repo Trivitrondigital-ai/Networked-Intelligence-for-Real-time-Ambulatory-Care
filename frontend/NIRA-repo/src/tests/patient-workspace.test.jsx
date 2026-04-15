@@ -116,7 +116,7 @@ test("expired scheduled appointments move into the missed bucket", () => {
   expect(workspace.bucketCounts.missed).toBe(1);
   expect(workspace.bucketCounts.upcoming).toBe(0);
   expect(workspace.appointmentsByBucket.missed[0]?.journeyLabel).toBe("Missed appointment");
-  expect(workspace.nextRecommendedAction.label).toBe("Reschedule appointment");
+  expect(workspace.nextRecommendedAction.label).toBe("Change slot");
 });
 
 test("expired scheduled appointments with in-review data still move to missed", () => {

@@ -30,8 +30,8 @@ test("patient dashboard buckets open appointment lists and review detail states"
   await user.click(screen.getByRole("link", { name: /in review/i }));
 
   expect(await screen.findByRole("heading", { name: /my appointments/i, level: 1 })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /submitted/i })).toBeInTheDocument();
-  await user.click(screen.getByRole("link", { name: /missed/i }));
+  expect(screen.getByRole("link", { name: /pre-check submitted/i })).toBeInTheDocument();
+  await user.click(screen.getByRole("link", { name: /pre-check submitted/i }));
   await user.click(screen.getByRole("link", { name: /dr\. nisha mehra/i }));
 
   expect(await screen.findByText("What happens now")).toBeInTheDocument();

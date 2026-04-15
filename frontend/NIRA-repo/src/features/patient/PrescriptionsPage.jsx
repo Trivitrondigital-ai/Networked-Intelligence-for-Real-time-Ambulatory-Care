@@ -8,6 +8,7 @@ import { Card, CardHeader } from "../../components/ui/Card";
 import { useDemoData } from "../../app/DemoDataProvider";
 import { getPatientWorkspace } from "../shared/selectors";
 import { formatDate } from "../../lib/format";
+import { downloadPrescriptionPdf } from "../../services/prescriptionPdf";
 
 function getPrescriptionBucket(prescription) {
   const issuedDate = new Date(prescription.issuedAt);
@@ -26,10 +27,11 @@ function getPrescriptionBucket(prescription) {
 
 export function PrescriptionsPage() {
   const { state } = useDemoData();
-  const { prescriptions } = getPatientWorkspace(state);
+  const { prescriptions, patient } = getPatientWorkspace(state);
   const [tab, setTab] = useState("active");
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
+  const [downloadingId, setDownloadingId] = useState("");
 
   const filtered = useMemo(() => {
     return prescriptions.filter((rx) => {
@@ -50,6 +52,27 @@ export function PrescriptionsPage() {
     past: prescriptions.filter((rx) => getPrescriptionBucket(rx) === "past").length,
     expired: prescriptions.filter((rx) => getPrescriptionBucket(rx) === "expired").length
   };
+
+  async function handleDownloadPdf(prescription) {
+    const appointment = state.appointments.byId[prescription.appointmentId] || null;
+    const doctor = appointment ? state.doctors.byId[appointment.doctorId] || null : null;
+    const encounter = appointment ? state.encounters.byId[`encounter-${appointment.id}`] || null : null;
+
+    try {
+      setDownloadingId(prescription.id);
+      await downloadPrescriptionPdf({
+        prescription,
+        patient,
+        doctor,
+        appointment,
+        encounter
+      });
+    } catch (error) {
+      console.error("[NIRA] Prescription PDF download failed.", error);
+    } finally {
+      setDownloadingId("");
+    }
+  }
 
   return (
     <AppShell
@@ -148,9 +171,18 @@ export function PrescriptionsPage() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button asChild variant="secondary" size="sm">
                       <Link to={`/patient/prescriptions/${prescription.id}`}>
-                        <FileDown className="h-4 w-4" />
-                        PDF ↓
+                        View details
                       </Link>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleDownloadPdf(prescription)}
+                      disabled={downloadingId === prescription.id}
+                    >
+                        <FileDown className="h-4 w-4" />
+                        {downloadingId === prescription.id ? "Preparing PDF..." : "Download PDF"}
                     </Button>
                     <Button asChild variant="ghost" size="sm">
                       <Link to="/patient/booking">

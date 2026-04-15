@@ -218,7 +218,7 @@ export function PatientAppointmentDetailPanel({
             <Button asChild variant="accent">
               <Link to={reschedulePath}>
                 <CalendarClock className="h-4 w-4" />
-                Reschedule with same doctor
+                Change slot (same doctor)
               </Link>
             </Button>
           ) : null}
@@ -297,7 +297,7 @@ export function PatientAppointmentDetailPanel({
               </div>
             ) : appointment.journeyBucket === "missed" ? (
               <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-900">
-                This visit was missed, so the active care flow stopped here. Use the reschedule action above to pick a new slot with the same doctor.
+                This visit was missed, so the active care flow stopped here. Use the change-slot action above to pick a new slot with the same doctor.
               </div>
             ) : null}
           </div>
@@ -319,7 +319,7 @@ export function PatientAppointmentDetailPanel({
                 : appointment.journeyBucket === "completed"
                   ? "This visit has been completed and the approved prescription is available in your portal."
                   : appointment.journeyBucket === "missed"
-                    ? "This visit was missed, so it has been moved out of the upcoming queue. Reschedule it with the same doctor to continue care."
+                    ? "This visit was missed, so it has been moved out of the upcoming queue. Change the slot with the same doctor to continue care."
                   : appointment.journeyBucket === "cancelled"
                     ? "This visit is cancelled and kept only for history. It will no longer move forward in the workflow."
                     : "Your appointment is booked. If needed, you can still review details or cancel before completion."}

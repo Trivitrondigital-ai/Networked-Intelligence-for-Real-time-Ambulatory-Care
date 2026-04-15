@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Plus, Send, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarClock, CheckCircle2, Plus, Search, Send, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { AppShell } from "../../components/layout/AppShell";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -9,9 +9,11 @@ import { Field, Input, Textarea } from "../../components/ui/FormFields";
 import { Modal } from "../../components/ui/Modal";
 import { useDemoData } from "../../app/DemoDataProvider";
 import { getAppointmentBundle, getDoctorWorkspace } from "../shared/selectors";
-import { formatStatus, formatTime } from "../../lib/format";
+import { formatDate, formatStatus, formatTime } from "../../lib/format";
 import { findDrugInteractions } from "../shared/DDIChecker";
 import { cn } from "../../lib/utils";
+import { getTodayDayKey } from "../../lib/schedule";
+import { useVirtualizedRows } from "../../hooks/useVirtualizedRows";
 import { listCollection } from "../../services/stateHelpers";
 
 const INVESTIGATION_SUGGESTIONS = [
@@ -57,6 +59,33 @@ const LAB_TEST_DISPLAY = {
   "Chest X-Ray": { label: "Chest X-Ray", dept: "RADIOLOGY", sample: "Imaging | 24 hours" },
   CRP: { label: "CRP", dept: "BIOCHEMISTRY", sample: "Blood | 3 hours" }
 };
+
+const QUEUE_ROW_HEIGHT_PX = 148;
+const QUEUE_LIST_HEIGHT_PX = 520;
+
+function getQueueCategory(item) {
+  if (item.queueStatus === "approved" || item.bookingStatus === "completed") {
+    return "completed";
+  }
+
+  if (item.queueStatus === "in_consult") {
+    return "in_consult";
+  }
+
+  if (item.queueStatus === "ai_ready") {
+    return "precheck_submitted";
+  }
+
+  return "precheck_pending";
+}
+
+function formatDayScope(dayKey) {
+  if (!dayKey || dayKey === "all") {
+    return "All dates";
+  }
+
+  return formatDate(`${dayKey}T00:00:00+05:30`);
+}
 
 function getLabDisplay(key) {
   return LAB_TEST_DISPLAY[key] || { label: key, dept: "GENERAL", sample: "As ordered" };
@@ -260,6 +289,7 @@ export function DoctorChartPage() {
   const { state, actions } = useDemoData();
   const bundle = getAppointmentBundle(state, appointmentId);
   const { appointments } = getDoctorWorkspace(state);
+  const todayDayKey = state?.meta?.today || getTodayDayKey();
 
   const precheckByAppointment = useMemo(() => {
     const map = {};
@@ -274,6 +304,82 @@ export function DoctorChartPage() {
   const [approving, setApproving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [previewPrescription, setPreviewPrescription] = useState(bundle?.prescription || null);
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queueStatusFilter, setQueueStatusFilter] = useState("all");
+  const [queueDateFilter, setQueueDateFilter] = useState(todayDayKey);
+  const [queueCalendarDate, setQueueCalendarDate] = useState(todayDayKey);
+
+  useEffect(() => {
+    if (!queueCalendarDate && todayDayKey) {
+      setQueueCalendarDate(todayDayKey);
+    }
+
+    if (!queueDateFilter && todayDayKey) {
+      setQueueDateFilter(todayDayKey);
+    }
+  }, [queueCalendarDate, queueDateFilter, todayDayKey]);
+
+  useEffect(() => {
+    if (queueDateFilter !== todayDayKey) {
+      return;
+    }
+
+    const hasTodayQueue = appointments.some((item) => String(item.startAt || "").slice(0, 10) === todayDayKey);
+    if (!hasTodayQueue) {
+      setQueueDateFilter("all");
+    }
+  }, [appointments, queueDateFilter, todayDayKey]);
+
+  const queueStatusCounts = useMemo(() => {
+    return {
+      all: appointments.length,
+      precheck_pending: appointments.filter((item) => getQueueCategory(item) === "precheck_pending").length,
+      precheck_submitted: appointments.filter((item) => getQueueCategory(item) === "precheck_submitted").length,
+      in_consult: appointments.filter((item) => getQueueCategory(item) === "in_consult").length,
+      completed: appointments.filter((item) => getQueueCategory(item) === "completed").length
+    };
+  }, [appointments]);
+
+  const filteredQueueAppointments = useMemo(() => {
+    const searchNeedle = queueSearch.trim().toLowerCase();
+
+    return appointments.filter((item) => {
+      if (queueStatusFilter !== "all" && getQueueCategory(item) !== queueStatusFilter) {
+        return false;
+      }
+
+      if (queueDateFilter !== "all" && String(item.startAt || "").slice(0, 10) !== queueDateFilter) {
+        return false;
+      }
+
+      if (!searchNeedle) {
+        return true;
+      }
+
+      const searchable = [
+        item.patient?.fullName,
+        item.token,
+        item.id,
+        item.queueStatus
+      ]
+        .filter(Boolean)
+        .map((entry) => String(entry).toLowerCase());
+
+      return searchable.some((entry) => entry.includes(searchNeedle));
+    });
+  }, [appointments, queueDateFilter, queueSearch, queueStatusFilter]);
+
+  const {
+    viewportRef: queueViewportRef,
+    onScroll: onQueueScroll,
+    totalHeight: queueTotalHeight,
+    virtualRows: virtualQueueRows
+  } = useVirtualizedRows(filteredQueueAppointments, {
+    rowHeight: QUEUE_ROW_HEIGHT_PX,
+    viewportHeight: QUEUE_LIST_HEIGHT_PX,
+    overscan: 4,
+    resetKey: `${queueDateFilter}|${queueStatusFilter}|${queueSearch}`
+  });
 
   useEffect(() => {
     if (bundle) {
@@ -418,7 +524,7 @@ export function DoctorChartPage() {
       <div className="unified-emr-shell">
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:items-start lg:gap-6">
           {/* Left: patients in queue */}
-          <aside className="lg:col-span-3">
+          <aside className="lg:col-span-3 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pb-4">
             <div className="unified-emr-panel p-4 sm:p-5">
               <p className="unified-emr-eyebrow">Patients in queue</p>
               <h2 className="mt-2 text-lg font-bold tracking-tight text-slate-900">Consult navigation</h2>
@@ -426,40 +532,182 @@ export function DoctorChartPage() {
                 Jump between queued patients while keeping the doctor workflow intact.
               </p>
             </div>
-            <div className="mt-4 space-y-3">
-              {appointments.map((item) => {
-                const active = item.id === bundle.appointment.id;
-                const pq = precheckByAppointment[item.id];
-                const showPrecheck = pq && ["sent_to_patient", "completed"].includes(pq.status);
-                const complaint =
-                  item.encounter?.apciDraft?.soap?.chiefComplaint ||
-                  (item.encounter?.apciDraft?.soap?.subjective
-                    ? String(item.encounter.apciDraft.soap.subjective).slice(0, 140)
-                    : "");
-                return (
-                  <Link
-                    key={item.id}
-                    to={`/doctor/patient/${item.id}`}
+            <div className="mt-4 unified-emr-panel space-y-3 p-3.5">
+              <label htmlFor="doctor-unified-queue-search" className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+                Search queue
+              </label>
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3">
+                <Search className="h-4 w-4 text-slate-400" />
+                <input
+                  id="doctor-unified-queue-search"
+                  value={queueSearch}
+                  onChange={(event) => setQueueSearch(event.target.value)}
+                  placeholder="Patient, token, status"
+                  className="h-10 w-full bg-transparent text-sm outline-none"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Date scope</div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQueueDateFilter("all")}
                     className={cn(
-                      "block rounded-2xl border p-3.5 transition",
-                      active ? "unified-emr-panel-mint border-emerald-200/90" : "unified-emr-panel border-slate-200/90 hover:border-slate-300"
+                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                      queueDateFilter === "all"
+                        ? "border-cyan-300 bg-cyan-50 text-cyan-900"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                     )}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="font-semibold text-slate-900">{item.patient?.fullName}</span>
-                      {showPrecheck ? (
-                        <span className="shrink-0 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-800">
-                          Pre check
-                        </span>
-                      ) : null}
+                    All dates
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQueueCalendarDate(todayDayKey);
+                      setQueueDateFilter(todayDayKey);
+                    }}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                      queueDateFilter === todayDayKey
+                        ? "border-cyan-300 bg-cyan-50 text-cyan-900"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    Today
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4 text-slate-400" />
+                  <input
+                    type="date"
+                    value={queueCalendarDate}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setQueueCalendarDate(value);
+                      setQueueDateFilter(value || "all");
+                    }}
+                    className="h-9 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:border-cyan-300"
+                  />
+                </div>
+                <div className="text-xs text-slate-500">Viewing {formatDayScope(queueDateFilter)}.</div>
+              </div>
+
+              <div className="grid gap-2">
+                <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Queue stage</div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: "all", label: "All" },
+                    { key: "precheck_pending", label: "Pre-check pending" },
+                    { key: "precheck_submitted", label: "Pre-check submitted" },
+                    { key: "in_consult", label: "In consult" },
+                    { key: "completed", label: "Completed" }
+                  ].map((filter) => (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      onClick={() => setQueueStatusFilter(filter.key)}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                        queueStatusFilter === filter.key
+                          ? "border-cyan-300 bg-cyan-50 text-cyan-900"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      )}
+                    >
+                      {filter.label} ({queueStatusCounts[filter.key] || 0})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              {filteredQueueAppointments.length ? (
+                <>
+                  <div
+                    ref={queueViewportRef}
+                    onScroll={onQueueScroll}
+                    className="overflow-y-auto"
+                    style={{ height: `${QUEUE_LIST_HEIGHT_PX}px` }}
+                  >
+                    <div className="relative" style={{ height: `${queueTotalHeight}px` }}>
+                      {virtualQueueRows.map(({ item, index }) => {
+                        const active = item.id === bundle.appointment.id;
+                        const queueCategory = getQueueCategory(item);
+                        const queueLabel =
+                          queueCategory === "precheck_pending"
+                            ? "Pre-check pending"
+                            : queueCategory === "precheck_submitted"
+                              ? "Pre-check submitted"
+                              : queueCategory === "in_consult"
+                                ? "In consult"
+                                : "Completed";
+                        const queueTone =
+                          queueCategory === "precheck_pending"
+                            ? "warning"
+                            : queueCategory === "completed"
+                              ? "success"
+                              : "info";
+                        const pq = precheckByAppointment[item.id];
+                        const showPrecheck = pq && ["sent_to_patient", "completed"].includes(pq.status);
+                        const complaint =
+                          item.encounter?.apciDraft?.soap?.chiefComplaint ||
+                          (item.encounter?.apciDraft?.soap?.subjective
+                            ? String(item.encounter.apciDraft.soap.subjective).slice(0, 140)
+                            : "");
+
+                        return (
+                          <div
+                            key={item.id}
+                            style={{
+                              position: "absolute",
+                              left: 0,
+                              right: 0,
+                              top: `${index * QUEUE_ROW_HEIGHT_PX}px`,
+                              height: `${QUEUE_ROW_HEIGHT_PX}px`,
+                              padding: "4px"
+                            }}
+                          >
+                            <Link
+                              to={`/doctor/patient/${item.id}`}
+                              className={cn(
+                                "block h-full rounded-2xl border p-3.5 transition",
+                                active
+                                  ? "unified-emr-panel-mint border-emerald-200/90"
+                                  : "unified-emr-panel border-slate-200/90 hover:border-slate-300"
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="font-semibold text-slate-900">{item.patient?.fullName}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <Badge tone={queueTone}>{queueLabel}</Badge>
+                                  {showPrecheck ? (
+                                    <span className="shrink-0 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-800">
+                                      Pre check
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </div>
+                              <p className="mt-1.5 text-xs text-slate-500">
+                                {formatTime(item.startAt)} · Token {item.token}
+                              </p>
+                              {complaint ? <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-600">{complaint}</p> : null}
+                            </Link>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <p className="mt-1.5 text-xs text-slate-500">
-                      {formatTime(item.startAt)} · Token {item.token}
-                    </p>
-                    {complaint ? <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-600">{complaint}</p> : null}
-                  </Link>
-                );
-              })}
+                  </div>
+                  <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                    Virtualized queue enabled. Showing {filteredQueueAppointments.length} patient(s).
+                  </div>
+                </>
+              ) : (
+                <div className="p-4 text-sm text-slate-500">
+                  No patients match current queue filters.
+                </div>
+              )}
             </div>
           </aside>
 

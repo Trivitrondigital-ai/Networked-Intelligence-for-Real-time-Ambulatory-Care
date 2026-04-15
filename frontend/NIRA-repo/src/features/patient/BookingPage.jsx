@@ -44,6 +44,25 @@ function getLiveAvailableSlots(schedule, referenceMs = Date.now()) {
   return (schedule?.slots || []).filter((slot) => isLiveAvailableSlot(slot, referenceMs));
 }
 
+function buildSlotsForBooking(schedule, rescheduleAppointment, referenceMs = Date.now()) {
+  const allSlots = schedule?.slots || [];
+  const currentSlotId = rescheduleAppointment?.slotId || "";
+  const liveSlots = getLiveAvailableSlots(schedule, referenceMs);
+  const currentSlot = currentSlotId ? allSlots.find((slot) => slot.id === currentSlotId) || null : null;
+  const merged = [...liveSlots];
+
+  if (currentSlot && !merged.some((slot) => slot.id === currentSlot.id)) {
+    merged.push(currentSlot);
+  }
+
+  return merged
+    .sort((left, right) => new Date(left.startAt) - new Date(right.startAt))
+    .map((slot) => ({
+      ...slot,
+      isCurrentSlot: Boolean(currentSlot && slot.id === currentSlot.id)
+    }));
+}
+
 export function BookingPage() {
   const { state, session, actions } = useDemoData();
   const [searchParams] = useSearchParams();
@@ -106,23 +125,30 @@ export function BookingPage() {
       return dateOptions
         .map((date) => {
           const schedule = getScheduleByDate(state, doctor.id, date);
-          const liveSlots = getLiveAvailableSlots(schedule, referenceMs);
+          const slotsForDisplay = buildSlotsForBooking(
+            schedule,
+            isRescheduleMode ? rescheduleAppointment : null,
+            referenceMs
+          );
+          const availableCount = slotsForDisplay.filter((slot) => slot.status === "available" && !slot.isCurrentSlot).length;
+          const hasCurrentSlot = slotsForDisplay.some((slot) => slot.isCurrentSlot);
 
           return {
             date,
             schedule,
-            liveSlots,
-            availableCount: liveSlots.length
+            slotsForDisplay,
+            availableCount,
+            hasCurrentSlot
           };
         })
-        .filter((entry) => entry.availableCount > 0);
+        .filter((entry) => entry.availableCount > 0 || (isRescheduleMode && entry.hasCurrentSlot));
     },
-    [dateOptions, doctor, state]
+    [dateOptions, doctor, isRescheduleMode, rescheduleAppointment, state]
   );
   const selectedScheduleEntry = schedules.find((entry) => entry.date === selectedDate) || null;
   const selectedSchedule = selectedScheduleEntry?.schedule || null;
-  const selectedScheduleSlots = selectedScheduleEntry?.liveSlots || [];
-  const selectedSlot = selectedScheduleSlots.find((slot) => slot.id === selectedSlotId) || null;
+  const selectedScheduleSlots = selectedScheduleEntry?.slotsForDisplay || [];
+  const selectedSlot = selectedScheduleSlots.find((slot) => slot.id === selectedSlotId && !slot.isCurrentSlot) || null;
   const confirmationBundle = confirmationId ? state.appointments.byId[confirmationId] : null;
   const visibleDoctors = isRescheduleMode && doctor
     ? [doctor]
@@ -145,9 +171,10 @@ export function BookingPage() {
       return;
     }
 
-    const nextWithAvailability = schedules[0] || null;
+    const currentSlotDateEntry = schedules.find((entry) => entry.hasCurrentSlot) || null;
+    const nextWithAvailability = schedules.find((entry) => entry.availableCount > 0) || schedules[0] || null;
     const preferredDate = isRescheduleMode && rescheduleAppointment?.doctorId === doctor.id
-      ? nextWithAvailability?.date || ""
+      ? currentSlotDateEntry?.date || nextWithAvailability?.date || ""
       : nextWithAvailability?.date || "";
 
     setSelectedDate(preferredDate);
@@ -177,7 +204,7 @@ export function BookingPage() {
   }
 
   async function handleBooking() {
-    if (!selectedSlotId || !selectedDate || !doctor) {
+    if (!selectedSlot || !selectedDate || !doctor) {
       return;
     }
 
@@ -215,7 +242,7 @@ export function BookingPage() {
       title="Book by live doctor slots"
       subtitle={
         isRescheduleMode
-          ? "Reschedule with the same doctor by picking a fresh live slot."
+          ? "Change to a new slot with the same doctor."
           : "Doctor cards, live teal slots, and a one-tap confirmation flow."
       }
     >
@@ -223,10 +250,10 @@ export function BookingPage() {
         <Card density="compact">
           <CardHeader
             eyebrow="Doctor list"
-            title={isRescheduleMode ? "Same doctor, fresh slot" : "Choose your doctor"}
+            title={isRescheduleMode ? "Same doctor, choose new slot" : "Choose your doctor"}
             description={
               isRescheduleMode
-                ? "This reschedule flow keeps the original doctor and only updates the slot."
+                ? "This slot-change flow keeps the original doctor and only updates date/time."
                 : "Goal: 30-second booking"
             }
           />
@@ -239,7 +266,7 @@ export function BookingPage() {
           ) : null}
           {isRescheduleMode && doctor ? (
             <div className="mb-3 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-950">
-              Rescheduling stays with <span className="font-semibold">{doctor.fullName}</span>. To change doctors, book a new appointment instead of rescheduling this one.
+              Slot change stays with <span className="font-semibold">{doctor.fullName}</span>. To change doctors, book a new appointment instead.
             </div>
           ) : null}
           <div className={`grid gap-3 ${selectedDoctorId ? "" : "lg:grid-cols-2"}`}>
@@ -305,7 +332,7 @@ export function BookingPage() {
           <CardHeader
             eyebrow="Pick date & slot"
             title="Live availability"
-            description="Only available slots can be selected."
+              description={isRescheduleMode ? "Pick only a new date/time. Current slot stays disabled." : "Only available slots can be selected."}
           />
           <div className="space-y-4">
             <div className="-mx-1 overflow-x-auto px-1 pb-1">
@@ -334,23 +361,35 @@ export function BookingPage() {
             ) : null}
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-              {selectedScheduleSlots.map((slot) => (
-                <button
-                  key={slot.id}
-                  type="button"
-                  disabled={slot.status !== "available"}
-                  onClick={() => setSelectedSlotId(slot.id)}
-                  className={`rounded-xl border px-2.5 py-2.5 text-xs font-semibold transition sm:px-3 sm:text-sm ${
-                    selectedSlotId === slot.id
-                      ? "border-brand-sky bg-brand-sky text-white"
-                      : slot.status === "available"
-                        ? "border-cyan-200 bg-cyan-50 text-ink hover:-translate-y-0.5"
-                        : "border-line bg-surface-2 text-muted"
-                  } disabled:cursor-not-allowed disabled:opacity-80`}
-                >
-                  {formatTime(slot.startAt)} - {formatTime(slot.endAt)}
-                </button>
-              ))}
+              {selectedScheduleSlots.map((slot) => {
+                const isCurrentSlot = Boolean(slot.isCurrentSlot);
+                const isSelectable = slot.status === "available" && !isCurrentSlot;
+
+                return (
+                  <button
+                    key={slot.id}
+                    type="button"
+                    disabled={!isSelectable}
+                    onClick={() => {
+                      if (isSelectable) {
+                        setSelectedSlotId(slot.id);
+                      }
+                    }}
+                    className={`rounded-xl border px-2.5 py-2.5 text-xs font-semibold transition sm:px-3 sm:text-sm ${
+                      selectedSlotId === slot.id
+                        ? "border-brand-sky bg-brand-sky text-white"
+                        : isSelectable
+                          ? "border-cyan-200 bg-cyan-50 text-ink hover:-translate-y-0.5"
+                          : isCurrentSlot
+                            ? "border-amber-200 bg-amber-50 text-amber-900"
+                            : "border-line bg-surface-2 text-muted"
+                    } disabled:cursor-not-allowed disabled:opacity-80`}
+                  >
+                    {formatTime(slot.startAt)} - {formatTime(slot.endAt)}
+                    {isCurrentSlot ? <span className="mt-1 block text-[10px] font-medium">Current slot</span> : null}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </Card>
@@ -395,14 +434,14 @@ export function BookingPage() {
           </Card>
 
           <div className="space-y-3">
-            <Button onClick={handleBooking} disabled={!selectedSlotId || submitting} className="w-full sm:min-w-[220px]">
+            <Button onClick={handleBooking} disabled={!selectedSlot || submitting} className="w-full sm:min-w-[220px]">
               <CalendarCheck2 className="h-4 w-4" />
               {submitting
                 ? isRescheduleMode
-                  ? "Rescheduling appointment..."
+                  ? "Changing slot..."
                   : "Creating appointment..."
                 : isRescheduleMode
-                  ? "Confirm reschedule"
+                  ? "Confirm slot change"
                   : "Confirm slot"}
             </Button>
             <Button asChild variant="secondary" className="w-full sm:min-w-[220px]">
@@ -423,7 +462,7 @@ export function BookingPage() {
                 </div>
                 <div>
                   <div className="text-base font-semibold text-emerald-900">
-                    {isRescheduleMode ? "Appointment rescheduled" : "Appointment created"}
+                    {isRescheduleMode ? "Slot updated" : "Appointment created"}
                   </div>
                   <div className="text-sm text-emerald-800">
                     Token {confirmationBundle.token} confirmed for {formatDate(confirmationBundle.startAt)} at {formatTime(confirmationBundle.startAt)}

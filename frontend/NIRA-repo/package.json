@@ -22,6 +22,8 @@
     "clsx": "^2.1.1",
     "framer-motion": "^11.11.17",
     "gsap": "^3.14.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.468.0",
     "mongodb": "^6.16.0",
     "pg": "^8.20.0",

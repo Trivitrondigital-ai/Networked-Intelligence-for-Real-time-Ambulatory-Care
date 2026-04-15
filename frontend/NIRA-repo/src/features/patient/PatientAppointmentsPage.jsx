@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Ban, Calendar, CalendarClock, FileText, History, Home, MapPin, PlusCircle, RotateCcw, Timer, XCircle } from "lucide-react";
 import { AppShell } from "../../components/layout/AppShell";
@@ -13,6 +14,11 @@ import {
 } from "../shared/selectors";
 import { formatDate, formatTime } from "../../lib/format";
 import { PatientAppointmentDetailPanel } from "./PatientAppointmentDetailPanel";
+import { useVirtualizedRows } from "../../hooks/useVirtualizedRows";
+
+const APPOINTMENT_ROW_HEIGHT_PX = 192;
+const APPOINTMENT_LIST_HEIGHT_PX = 620;
+const APPOINTMENT_LIST_COMPACT_HEIGHT_PX = 500;
 
 const bucketMeta = {
   all: {
@@ -33,7 +39,7 @@ const bucketMeta = {
   },
   missed: {
     label: "Missed",
-    description: "Slots that already passed and should be rescheduled."
+    description: "Slots that already passed and should be moved to a fresh time."
   },
   completed: {
     label: "Completed / prescriptions",
@@ -95,6 +101,7 @@ export function PatientAppointmentsPage() {
   const [searchParams] = useSearchParams();
   const { state, actions } = useDemoData();
   const { appointmentsByBucket } = getPatientWorkspace(state);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   const bucket = getSafeBucket(searchParams.get("bucket"));
   const tabFromBucket =
@@ -121,6 +128,20 @@ export function PatientAppointmentsPage() {
     past: appointmentsByBucket.completed,
     cancelled: appointmentsByBucket.cancelled
   };
+
+  const activeTabAppointments = tabMap[tabFromBucket] || [];
+  const listViewportHeight = appointmentId ? APPOINTMENT_LIST_COMPACT_HEIGHT_PX : APPOINTMENT_LIST_HEIGHT_PX;
+  const {
+    viewportRef,
+    onScroll,
+    totalHeight,
+    virtualRows
+  } = useVirtualizedRows(activeTabAppointments, {
+    rowHeight: APPOINTMENT_ROW_HEIGHT_PX,
+    viewportHeight: listViewportHeight,
+    overscan: 4,
+    resetKey: `${tabFromBucket}:${activeTabAppointments.length}:${appointmentId || ""}`
+  });
 
   const selectedAppointment =
     (appointmentId ? getPatientAppointmentById(state, appointmentId) : null) ||
@@ -172,7 +193,7 @@ export function PatientAppointmentsPage() {
   return (
     <AppShell
       title={appointmentId ? "Appointment detail" : "My appointments"}
-      subtitle="One-tap reschedule, map directions, and fast filtering across all appointments."
+      subtitle="One-tap slot change, map directions, and fast filtering across all appointments."
       actions={
         <Button asChild variant="secondary">
           <Link to="/patient">
@@ -215,7 +236,7 @@ export function PatientAppointmentsPage() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[1.06fr_0.94fr]">
-          <Card density="compact" className={appointmentId ? "hidden lg:block" : ""}>
+          <Card density="compact" className={appointmentId ? "hidden lg:sticky lg:top-24 lg:block lg:self-start" : ""}>
             <CardHeader
               eyebrow="List view"
               title={
@@ -231,67 +252,106 @@ export function PatientAppointmentsPage() {
                           ? "Missed appointments"
                           : "Cancelled appointments"
               }
-              description="Goal: one-tap reschedule and directions from each row."
-              actions={<Badge tone={getBucketTone(bucket)}>{bucketMeta[bucket]?.label || "Appointments"}</Badge>}
+              description="Goal: one-tap slot change and directions from each row."
+              actions={(
+                <>
+                  <Badge tone={getBucketTone(bucket)}>{bucketMeta[bucket]?.label || "Appointments"}</Badge>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={showCalendar ? "accent" : "secondary"}
+                    onClick={() => setShowCalendar((current) => !current)}
+                  >
+                    <Calendar className="h-4 w-4" />
+                    {showCalendar ? "Hide calendar" : "Open calendar"}
+                  </Button>
+                </>
+              )}
             />
             <div className="space-y-3">
-              {(tabMap[tabFromBucket] || []).map((appointment) => {
-                const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(appointment.doctor?.clinic || "NIRA Clinic")}`;
-                const reschedulePath = getPatientReschedulePath(appointment);
-                return (
+              {activeTabAppointments.length ? (
+                <div className="rounded-2xl border border-line/40 bg-surface-2 p-2">
                   <div
-                    key={appointment.id}
-                    className={`rounded-2xl border p-4 transition ${
-                      selectedAppointment?.id === appointment.id
-                        ? "border-cyan-300 bg-brand-mint"
-                        : "border-line bg-surface-2"
-                    }`}
+                    ref={viewportRef}
+                    onScroll={onScroll}
+                    className="overflow-y-auto"
+                    style={{ height: `${listViewportHeight}px` }}
                   >
-                    <Link to={`/patient/appointments/${appointment.id}?bucket=${getBucketQueryFromTab(tabFromBucket)}`}>
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-base font-semibold text-ink">{formatTime(appointment.startAt)} {appointment.doctor?.fullName}</p>
-                          <p className="mt-1 text-sm text-muted">{formatDate(appointment.startAt)} · Token {appointment.token}</p>
-                        </div>
-                        <Badge tone={getBucketTone(appointment.journeyBucket)}>{appointment.journeyLabel}</Badge>
-                      </div>
-                    </Link>
+                    <div className="relative" style={{ height: `${totalHeight}px` }}>
+                      {virtualRows.map(({ item: appointment, index }) => {
+                        const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(appointment.doctor?.clinic || "NIRA Clinic")}`;
+                        const reschedulePath = getPatientReschedulePath(appointment);
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {tabFromBucket === "upcoming" || tabFromBucket === "pending-precheck" || tabFromBucket === "missed" ? (
-                        <Button asChild variant="secondary" size="sm">
-                          <Link to={reschedulePath}>
-                            <RotateCcw className="h-4 w-4" />
-                            {tabFromBucket === "missed" ? "Reschedule same doctor" : "Reschedule"}
-                          </Link>
-                        </Button>
-                      ) : null}
-                      {tabFromBucket === "upcoming" || tabFromBucket === "pending-precheck" || tabFromBucket === "precheck-submitted" ? (
-                        <Button asChild variant="secondary" size="sm">
-                          <a href={mapUrl} target="_blank" rel="noreferrer">
-                            <MapPin className="h-4 w-4" />
-                            Directions
-                          </a>
-                        </Button>
-                      ) : null}
-                      {tabFromBucket === "pending-precheck" ? (
-                        <Button type="button" variant="secondary" size="sm" onClick={() => openPrecheckForAppointment(appointment)}>
-                          <FileText className="h-4 w-4" />
-                          Start pre-check
-                        </Button>
-                      ) : null}
-                      {appointment.canCancel ? (
-                        <Button type="button" variant="ghost" size="sm" onClick={() => handleCancel(appointment.id)}>
-                          <XCircle className="h-4 w-4" />
-                          Cancel
-                        </Button>
-                      ) : null}
+                        return (
+                          <div
+                            key={appointment.id}
+                            style={{
+                              position: "absolute",
+                              left: 0,
+                              right: 0,
+                              top: `${index * APPOINTMENT_ROW_HEIGHT_PX}px`,
+                              height: `${APPOINTMENT_ROW_HEIGHT_PX}px`,
+                              padding: "4px"
+                            }}
+                          >
+                            <div
+                              className={`h-full rounded-2xl border p-4 transition ${
+                                selectedAppointment?.id === appointment.id
+                                  ? "border-cyan-300 bg-brand-mint"
+                                  : "border-line bg-white"
+                              }`}
+                            >
+                              <Link to={`/patient/appointments/${appointment.id}?bucket=${getBucketQueryFromTab(tabFromBucket)}`}>
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <div>
+                                    <p className="text-base font-semibold text-ink">{formatTime(appointment.startAt)} {appointment.doctor?.fullName}</p>
+                                    <p className="mt-1 text-sm text-muted">{formatDate(appointment.startAt)} · Token {appointment.token}</p>
+                                  </div>
+                                  <Badge tone={getBucketTone(appointment.journeyBucket)}>{appointment.journeyLabel}</Badge>
+                                </div>
+                              </Link>
+
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {tabFromBucket === "upcoming" || tabFromBucket === "pending-precheck" || tabFromBucket === "missed" ? (
+                                  <Button asChild variant="secondary" size="sm">
+                                    <Link to={reschedulePath}>
+                                      <RotateCcw className="h-4 w-4" />
+                                      {tabFromBucket === "missed" ? "Change slot (same doctor)" : "Change slot"}
+                                    </Link>
+                                  </Button>
+                                ) : null}
+                                {tabFromBucket === "upcoming" || tabFromBucket === "pending-precheck" || tabFromBucket === "precheck-submitted" ? (
+                                  <Button asChild variant="secondary" size="sm">
+                                    <a href={mapUrl} target="_blank" rel="noreferrer">
+                                      <MapPin className="h-4 w-4" />
+                                      Directions
+                                    </a>
+                                  </Button>
+                                ) : null}
+                                {tabFromBucket === "pending-precheck" ? (
+                                  <Button type="button" variant="secondary" size="sm" onClick={() => openPrecheckForAppointment(appointment)}>
+                                    <FileText className="h-4 w-4" />
+                                    Start pre-check
+                                  </Button>
+                                ) : null}
+                                {appointment.canCancel ? (
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => handleCancel(appointment.id)}>
+                                    <XCircle className="h-4 w-4" />
+                                    Cancel
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                );
-              })}
-
-              {!(tabMap[tabFromBucket] || []).length ? (
+                  <div className="mt-2 px-1 text-xs text-muted">
+                    Virtualized list enabled. Showing {activeTabAppointments.length} appointment(s).
+                  </div>
+                </div>
+              ) : (
                 <div className="rounded-xl border border-dashed border-line bg-surface-2 p-6 text-center">
                   <div className="text-base font-semibold text-ink">No appointments in this tab</div>
                   <div className="mt-2 text-sm leading-6 text-muted">
@@ -308,50 +368,52 @@ export function PatientAppointmentsPage() {
                     </Button>
                   </div>
                 </div>
-              ) : null}
+              )}
             </div>
           </Card>
 
           <div className="space-y-4">
-            <Card density="compact" className={appointmentId ? "hidden lg:block" : ""}>
-              <CardHeader
-                eyebrow="Calendar widget"
-                title="Monthly view"
-                description="Days with appointments are highlighted for quick planning."
-                actions={<Calendar className="h-4 w-4 text-brand-tide" />}
-              />
-              <div className="grid grid-cols-7 gap-2">
-                {monthlyDays.map((day, index) => (
-                  day.firstAppointment ? (
-                    <Link
-                      key={`${day.dayLabel}-${index}`}
-                      to={`/patient/appointments/${day.firstAppointment.id}?bucket=${day.firstAppointment.journeyBucket}`}
-                      className={`rounded-lg border p-2 text-center text-xs transition hover:-translate-y-0.5 hover:shadow-sm ${
-                        day.isToday
-                          ? "border-brand-sky bg-brand-mint text-ink"
-                          : "border-cyan-200 bg-cyan-50 text-ink"
-                      }`}
-                      title={`Open ${day.count} appointment${day.count === 1 ? "" : "s"}`}
-                    >
-                      <div className="font-semibold">{day.dayLabel}</div>
-                      <div className="mt-1 text-[10px]">{day.count} appt</div>
-                    </Link>
-                  ) : (
-                    <div
-                      key={`${day.dayLabel}-${index}`}
-                      className={`rounded-lg border p-2 text-center text-xs ${
-                        day.isToday
-                          ? "border-brand-sky bg-brand-mint text-ink"
-                          : "border-line bg-surface-2 text-muted"
-                      }`}
-                    >
-                      <div className="font-semibold">{day.dayLabel}</div>
-                      <div className="mt-1 text-[10px]">-</div>
-                    </div>
-                  )
-                ))}
-              </div>
-            </Card>
+            {showCalendar ? (
+              <Card density="compact" className={appointmentId ? "hidden lg:block" : ""}>
+                <CardHeader
+                  eyebrow="Calendar widget"
+                  title="Monthly view"
+                  description="Days with appointments are highlighted for quick planning."
+                  actions={<Calendar className="h-4 w-4 text-brand-tide" />}
+                />
+                <div className="grid grid-cols-7 gap-2">
+                  {monthlyDays.map((day, index) => (
+                    day.firstAppointment ? (
+                      <Link
+                        key={`${day.dayLabel}-${index}`}
+                        to={`/patient/appointments/${day.firstAppointment.id}?bucket=${day.firstAppointment.journeyBucket}`}
+                        className={`rounded-lg border p-2 text-center text-xs transition hover:-translate-y-0.5 hover:shadow-sm ${
+                          day.isToday
+                            ? "border-brand-sky bg-brand-mint text-ink"
+                            : "border-cyan-200 bg-cyan-50 text-ink"
+                        }`}
+                        title={`Open ${day.count} appointment${day.count === 1 ? "" : "s"}`}
+                      >
+                        <div className="font-semibold">{day.dayLabel}</div>
+                        <div className="mt-1 text-[10px]">{day.count} appt</div>
+                      </Link>
+                    ) : (
+                      <div
+                        key={`${day.dayLabel}-${index}`}
+                        className={`rounded-lg border p-2 text-center text-xs ${
+                          day.isToday
+                            ? "border-brand-sky bg-brand-mint text-ink"
+                            : "border-line bg-surface-2 text-muted"
+                        }`}
+                      >
+                        <div className="font-semibold">{day.dayLabel}</div>
+                        <div className="mt-1 text-[10px]">-</div>
+                      </div>
+                    )
+                  ))}
+                </div>
+              </Card>
+            ) : null}
 
             <div className={!appointmentId ? "hidden lg:block" : ""}>
               <PatientAppointmentDetailPanel
